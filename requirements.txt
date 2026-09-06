@@ -1,6 +1,3 @@
-torch
-torchvision
-torchaudio
 fastapi
 uvicorn
 python-dotenv

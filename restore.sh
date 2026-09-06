@@ -37,22 +37,48 @@ source venv/bin/activate
 pip install --upgrade pip
 
 echo ""
-echo "--- 3) استعادة/تثبيت الاعتمادات ---"
+echo "--- 3) استعادة/تثبيت الاعتماديات الأساسية (خفيفة) ---"
 if [ -f requirements.txt ]; then
   pip install -r requirements.txt
-  echo "[OK] requirements installed"
+  echo "[OK] base requirements installed"
 else
   echo "[FAIL] requirements.txt غير موجود"
   exit 1
 fi
 
 echo ""
-echo "--- 4) تجهيز المجلدات ---"
+echo "--- 4) تثبيت PyTorch مطابق لـ CUDA المكتشف فعلياً ---"
+if [ -f requirements-gpu.txt ]; then
+  CUDA_VER=$(nvcc --version 2>/dev/null | grep release)
+  CUDA_MAJOR_MINOR=$(nvidia-smi 2>/dev/null | grep -oE 'CUDA Version: [0-9]+\.[0-9]+' | grep -oE '[0-9]+\.[0-9]+' | head -n1)
+  if [ -z "$CUDA_MAJOR_MINOR" ] && [ -n "$CUDA_VER" ]; then
+    CUDA_MAJOR_MINOR=$(echo "$CUDA_VER" | grep -oE '[0-9]+\.[0-9]+' | head -n1)
+  fi
+
+  if [ -n "$CUDA_MAJOR_MINOR" ]; then
+    CUDA_TAG="cu$(echo "$CUDA_MAJOR_MINOR" | tr -d '.')"
+    echo "CUDA detected: ${CUDA_MAJOR_MINOR} -> index: https://download.pytorch.org/whl/${CUDA_TAG}"
+    if pip install -r requirements-gpu.txt --index-url "https://download.pytorch.org/whl/${CUDA_TAG}"; then
+      echo "[OK] PyTorch installed"
+    else
+      echo "[FAIL] فشل تثبيت PyTorch المطابق لـ ${CUDA_TAG}. راجع يدوياً: https://pytorch.org/get-started/locally/"
+      exit 1
+    fi
+  else
+    echo "[FAIL] تعذّر اكتشاف إصدار CUDA. لا يمكن تثبيت PyTorch بأمان تلقائياً."
+    exit 1
+  fi
+else
+  echo "[WARN] requirements-gpu.txt غير موجود"
+fi
+
+echo ""
+echo "--- 5) تجهيز المجلدات ---"
 mkdir -p worker/models worker/outputs worker/logs configs workflows scripts systemd docs
 echo "[OK] directories ready"
 
 echo ""
-echo "--- 5) ملف البيئة ---"
+echo "--- 6) ملف البيئة ---"
 if [ ! -f .env ]; then
   if [ -f .env.example ]; then
     cp .env.example .env
@@ -66,7 +92,7 @@ else
 fi
 
 echo ""
-echo "--- 6) فحص FFmpeg ---"
+echo "--- 7) فحص FFmpeg ---"
 FFMPEG_CHECK=$(ffmpeg -version 2>/dev/null | head -n1)
 if [ -z "$FFMPEG_CHECK" ]; then
   echo "[WARN] FFmpeg غير مثبت — نفّذ: sudo apt install ffmpeg -y"
@@ -75,7 +101,7 @@ else
 fi
 
 echo ""
-echo "--- 7) فحص Worker ---"
+echo "--- 8) فحص Worker ---"
 if [ -d worker ] && [ -n "$(ls -A worker 2>/dev/null)" ]; then
   echo "[OK] worker files present"
 else

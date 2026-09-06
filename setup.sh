@@ -63,11 +63,38 @@ source venv/bin/activate
 pip install --upgrade pip
 
 echo ""
-echo "--- Installing requirements ---"
+echo "--- Installing base requirements (lightweight) ---"
 if [ -f requirements.txt ]; then
   pip install -r requirements.txt
 else
   echo "[WARN] requirements.txt غير موجود"
+fi
+
+echo ""
+echo "--- Installing GPU requirements (PyTorch) dynamically matched to detected CUDA ---"
+if [ -f requirements-gpu.txt ]; then
+  CUDA_MAJOR_MINOR=$(nvidia-smi 2>/dev/null | grep -oE 'CUDA Version: [0-9]+\.[0-9]+' | grep -oE '[0-9]+\.[0-9]+' | head -n1)
+  if [ -z "$CUDA_MAJOR_MINOR" ] && [ -n "$CUDA_VER" ]; then
+    CUDA_MAJOR_MINOR=$(echo "$CUDA_VER" | grep -oE '[0-9]+\.[0-9]+' | head -n1)
+  fi
+
+  if [ -n "$CUDA_MAJOR_MINOR" ]; then
+    CUDA_TAG="cu$(echo "$CUDA_MAJOR_MINOR" | tr -d '.')"
+    echo "CUDA detected: ${CUDA_MAJOR_MINOR} -> trying index: https://download.pytorch.org/whl/${CUDA_TAG}"
+    if pip install -r requirements-gpu.txt --index-url "https://download.pytorch.org/whl/${CUDA_TAG}"; then
+      echo "[OK] PyTorch installed matching CUDA ${CUDA_MAJOR_MINOR}"
+    else
+      echo "[WARN] فشل التثبيت من index الخاص بـ ${CUDA_TAG}. جرّب يدوياً مطابقة الإصدار من: https://pytorch.org/get-started/locally/"
+      echo "STATUS=FAIL"
+      exit 1
+    fi
+  else
+    echo "[WARN] تعذّر اكتشاف إصدار CUDA بدقة. راجع يدوياً قبل تثبيت requirements-gpu.txt"
+    echo "STATUS=FAIL"
+    exit 1
+  fi
+else
+  echo "[WARN] requirements-gpu.txt غير موجود"
 fi
 
 echo ""
